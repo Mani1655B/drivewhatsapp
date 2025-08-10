@@ -1,0 +1,944 @@
+{
+  "name": "My workflow 9",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "whatsapp",
+        "options": {}
+      },
+      "id": "28336b9a-3fb6-407f-85a2-1f29c3f1987a",
+      "name": "WhatsApp Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        -1808,
+        624
+      ],
+      "webhookId": "4c58d02e-0e25-49d3-92de-34f81cb145c7"
+    },
+    {
+      "parameters": {
+        "url": "https://www.googleapis.com/drive/v3/files",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleDriveOAuth2Api",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "q",
+              "value": "={{$('Prepare Summary Query').first().json.query}}"
+            },
+            {
+              "name": "fields",
+              "value": "files(id,name,mimeType,size)"
+            },
+            {
+              "name": "pageSize",
+              "value": "10"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "58a63476-35b5-4dea-9ceb-222f12052b38",
+      "name": "Get Files for Summary",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [
+        -496,
+        816
+      ],
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "eszQwJ5VM9t6FZ0D",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "functionCode": "// Get Vonage payload\nconst payload = $json.body || {};\n\n// Extract message details\nconst fromNumber = payload.from || 'unknown';\nconst messageBody = payload.text || '';\nconst messageSid = payload.message_uuid || '';\n\n// Parse command from message\nconst message = messageBody.trim().toUpperCase();\nconst parts = message.split(' ');\nconst command = parts[0];\nconst args = parts.slice(1);\n\nlet parsedCommand = {\n  command: '',\n  action: '',\n  path: '',\n  destination: '',\n  valid: false,\n  error: ''\n};\n\n// Command handling\nswitch (command) {\n  case 'LIST':\n    // Join all args to handle multi-word folder names\n    const listPath = args.length > 0 ? args.join(' ') : '/';\n    parsedCommand = {\n      command: 'LIST',\n      action: 'list_files',\n      path: listPath,\n      destination: '',\n      valid: true,\n      error: ''\n    };\n    break;\n\n  case 'DELETE':\n    if (args.length >= 1) {\n      // Join all args to handle multi-word filenames\n      const fileName = args.join(' ');\n      parsedCommand = {\n        command: 'DELETE',\n        action: 'delete_file',\n        path: fileName,\n        destination: '',\n        valid: true,\n        error: ''\n      };\n    } else {\n      parsedCommand.error = 'DELETE command requires a filename. Example: DELETE MY RESUME.pdf';\n    }\n    break;\n\n  case 'MOVE':\n    if (args.length >= 2) {\n      // Join all args except the last one for filename, last arg is destination\n      const fileName = args.slice(0, -1).join(' ');\n      const destination = args[args.length - 1];\n      parsedCommand = {\n        command: 'MOVE',\n        action: 'move_file',\n        path: fileName,\n        destination: destination,\n        valid: true,\n        error: ''\n      };\n    } else {\n      parsedCommand.error = 'MOVE command requires filename and destination. Example: MOVE My Resume.pdf folder123';\n    }\n    break;\n\n  case 'SUMMARY':\n    // Join all args to handle multi-word folder names\n    const summaryPath = args.length > 0 ? args.join(' ') : '/';\n    parsedCommand = {\n      command: 'SUMMARY',\n      action: 'summarize_folder',\n      path: summaryPath,\n      destination: '',\n      valid: true,\n      error: ''\n    };\n    break;\n\n  case 'HELP':\n    parsedCommand = {\n      command: 'HELP',\n      action: 'show_help',\n      path: '',\n      destination: '',\n      valid: true,\n      error: ''\n    };\n    break;\n\n  default:\n    parsedCommand.error = `Unknown command: ${command}. Send HELP for available commands.`;\n}\n\n// Return for next nodes\nreturn {\n  whatsapp: {\n    from: fromNumber,\n    messageSid: messageSid,\n    originalMessage: messageBody\n  },\n  parsed: parsedCommand,\n  timestamp: new Date().toISOString()\n};"
+      },
+      "id": "43a30f5f-fe43-49b7-a15a-2a962c417b70",
+      "name": "Parse WhatsApp Command",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        -1504,
+        624
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$json.parsed.valid}}",
+              "value2": "={{true}}"
+            }
+          ]
+        }
+      },
+      "id": "6b8d9d57-5caf-41f4-a2f4-41a30024a259",
+      "name": "Valid Command?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        -1232,
+        624
+      ]
+    },
+    {
+      "parameters": {
+        "dataType": "string",
+        "value1": "={{$json.parsed.action}}",
+        "rules": {
+          "rules": [
+            {
+              "value2": "list_files"
+            },
+            {
+              "value2": "delete_file",
+              "output": 1
+            },
+            {
+              "value2": "move_file",
+              "output": 2
+            },
+            {
+              "value2": "summarize_folder",
+              "output": 3
+            },
+            {
+              "value2": "show_help",
+              "output": 4
+            }
+          ]
+        }
+      },
+      "id": "bc697664-d5c8-4312-b040-a54239a48502",
+      "name": "Route Command",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 1,
+      "position": [
+        -1024,
+        528
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://www.googleapis.com/drive/v3/files",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleDriveOAuth2Api",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "q",
+              "value": "={{$json.parsed.path === '/' ? '' : \"'\" + $json.parsed.path + \"' in parents\"}}"
+            },
+            {
+              "name": "fields",
+              "value": "files(id,name,mimeType,size,parents)"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "fed049c3-f926-4b99-9dba-5508e5706f85",
+      "name": "List Google Drive Files",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [
+        -512,
+        112
+      ],
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "eszQwJ5VM9t6FZ0D",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "https://www.googleapis.com/drive/v3/files",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleDriveOAuth2Api",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "q",
+              "value": "={{\"name='\" + $json.parsed.path + \"'\"}}"
+            },
+            {
+              "name": "fields",
+              "value": "files(id,name)"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "c7ee76b9-8fec-40d1-9c40-d6d439651035",
+      "name": "Delete Google Drive File",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [
+        -512,
+        304
+      ],
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "eszQwJ5VM9t6FZ0D",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "DELETE",
+        "url": "={{\"https://www.googleapis.com/drive/v3/files/\" + $json.files[0].id}}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleDriveOAuth2Api",
+        "options": {}
+      },
+      "id": "8788d724-cc17-4221-b298-be9a5aeeb6aa",
+      "name": "Actually Delete File",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [
+        -272,
+        128
+      ],
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "eszQwJ5VM9t6FZ0D",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "https://www.googleapis.com/drive/v3/files",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleDriveOAuth2Api",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "q",
+              "value": "={{\"name='\" + $('Parse WhatsApp Command').first().json.parsed.path + \"'\"}}"
+            },
+            {
+              "name": "fields",
+              "value": "files(id,name,parents)"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "67254b0d-ea83-4a8f-a844-dfe67d7bd2a7",
+      "name": "Search File to Move",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [
+        -816,
+        640
+      ],
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "eszQwJ5VM9t6FZ0D",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "https://www.googleapis.com/drive/v3/files",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleDriveOAuth2Api",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "q",
+              "value": "={{\"name='\" + $('Parse WhatsApp Command').first().json.parsed.destination + \"' and mimeType='application/vnd.google-apps.folder' and trashed=false\"}}"
+            },
+            {
+              "name": "fields",
+              "value": "files(id,name)"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "6eba7a34-5da8-4b0f-96c3-4c9744b10c3f",
+      "name": "Search Destination Folder",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [
+        -704,
+        528
+      ],
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "eszQwJ5VM9t6FZ0D",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Prepare data for move operation\nconst fileData = $('Search File to Move').first().json;\nconst folderData = $('Search Destination Folder').first().json;\n\n// Get the original parsed command data\nconst parsedCommand = $('Parse WhatsApp Command').first().json.parsed;\n\n// Check if we have the parsed command data\nif (!parsedCommand) {\n  throw new Error('Cannot access parsed command data');\n}\n\n// Check if file was found\nif (!fileData.files || fileData.files.length === 0) {\n  throw new Error(`File '${parsedCommand.path}' not found in Google Drive`);\n}\n\n// Check if destination folder was found\nif (!folderData.files || folderData.files.length === 0) {\n  throw new Error(`Destination folder '${parsedCommand.destination}' not found. Please make sure the folder exists and is named exactly '${parsedCommand.destination}'`);\n}\n\nconst file = fileData.files[0];\nconst destinationFolder = folderData.files[0];\n\n// Additional validation to ensure we found a folder, not a file\nif (!destinationFolder.name || destinationFolder.name.includes('.')) {\n  throw new Error(`Destination '${parsedCommand.destination}' appears to be a file (${destinationFolder.name}), not a folder. Please specify a folder name.`);\n}\n\n// Debug logging\nconsole.log('File found:', file.name, 'ID:', file.id);\nconsole.log('Destination folder found:', destinationFolder.name, 'ID:', destinationFolder.id);\nconsole.log('Current parent:', file.parents ? file.parents[0] : 'none');\n\n// Return the data needed for the move operation\nreturn {\n  fileId: file.id,\n  fileName: file.name,\n  currentParentId: file.parents ? file.parents[0] : null,\n  destinationFolderId: destinationFolder.id,\n  destinationFolderName: destinationFolder.name,\n  originalCommand: parsedCommand\n};"
+      },
+      "id": "1ecff4e7-48ef-4ee2-8abe-336b9d4ee851",
+      "name": "Prepare Move Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -496,
+        672
+      ]
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{\"https://www.googleapis.com/drive/v3/files/\" + $json.fileId}}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleDriveOAuth2Api",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "addParents",
+              "value": "={{$json.destinationFolderId}}"
+            },
+            {
+              "name": "removeParents",
+              "value": "={{$json.currentParentId}}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "c74f3295-2dce-4e7f-968c-64da7e3f0da2",
+      "name": "Move Google Drive File",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [
+        -512,
+        480
+      ],
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "eszQwJ5VM9t6FZ0D",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "https://www.googleapis.com/drive/v3/files",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleDriveOAuth2Api",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "q",
+              "value": "={{$('Parse WhatsApp Command').first().json.parsed.path === '/' ? \"\" : \"name='\" + $('Parse WhatsApp Command').first().json.parsed.path + \"' and trashed=false\"}}"
+            },
+            {
+              "name": "fields",
+              "value": "files(id,name)"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "d3b0fe1c-357c-4e16-a47a-a23a56323a0f",
+      "name": "Search Summary Folder",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [
+        -944,
+        832
+      ],
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "eszQwJ5VM9t6FZ0D",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Determine if we're dealing with a file or folder and prepare appropriate query\nconst parsedCommand = $('Parse WhatsApp Command').first().json.parsed;\nconst searchResult = $('Search Summary Folder').first().json;\n\n// Handle root directory case\nif (parsedCommand.path === '/') {\n  return {\n    query: \"mimeType!='application/vnd.google-apps.folder' and trashed=false\",\n    isFolder: true,\n    targetName: 'Root Directory'\n  };\n}\n\n// Check if we found any results\nif (!searchResult.files || searchResult.files.length === 0) {\n  throw new Error(`No file or folder named '${parsedCommand.path}' found`);\n}\n\nconst foundItem = searchResult.files[0];\nconst isFolder = foundItem.mimeType === 'application/vnd.google-apps.folder';\n\nif (isFolder) {\n  // It's a folder - get all files inside it\n  return {\n    query: `'${foundItem.id}' in parents and mimeType!='application/vnd.google-apps.folder' and trashed=false`,\n    isFolder: true,\n    targetName: foundItem.name,\n    targetId: foundItem.id\n  };\n} else {\n  // It's a single file - search by name to be safer with special characters\n  const escapedName = foundItem.name.replace(/'/g, \"\\\\'\");\n  return {\n    query: `name='${escapedName}' and mimeType!='application/vnd.google-apps.folder' and trashed=false`,\n    isFolder: false,\n    targetName: foundItem.name,\n    targetId: foundItem.id,\n    mimeType: foundItem.mimeType,\n    // For single files, we'll return the file data directly\n    fileData: foundItem\n  };\n}"
+      },
+      "id": "2446c90b-f19e-48e3-ae21-28bd38c87171",
+      "name": "Prepare Summary Query",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -720,
+        832
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "// Process files and prepare for AI summary (handles both single files and folders)\nconst files = $input.all();\nlet summaryPrompts = [];\n\n// Define supported text-based file types\nconst textMimeTypes = [\n  'application/pdf',\n  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',\n  'application/msword',\n  'text/plain',\n  'application/vnd.google-apps.document'\n];\n\nfor (let file of files) {\n  if (file.json) {\n    // Handle case where we get a list of files (folder contents)\n    if (file.json.files && Array.isArray(file.json.files)) {\n      for (let driveFile of file.json.files) {\n        if (textMimeTypes.includes(driveFile.mimeType)) {\n          summaryPrompts.push({\n            fileId: driveFile.id,\n            fileName: driveFile.name,\n            mimeType: driveFile.mimeType,\n            size: driveFile.size\n          });\n        }\n      }\n    }\n    // Handle case where we get a single file directly\n    else if (file.json.id && file.json.name && file.json.mimeType) {\n      if (textMimeTypes.includes(file.json.mimeType)) {\n        summaryPrompts.push({\n          fileId: file.json.id,\n          fileName: file.json.name,\n          mimeType: file.json.mimeType,\n          size: file.json.size\n        });\n      }\n    }\n  }\n}\n\n// If no summarizable files found, return helpful message\nif (summaryPrompts.length === 0) {\n  throw new Error('No summarizable files found. Supported formats: PDF, Word docs, Google Docs, Text files');\n}\n\nreturn summaryPrompts.map(file => ({\n  json: {\n    fileInfo: file,\n    needsContent: true\n  }\n}));"
+      },
+      "id": "bfddecef-8dc2-4c6f-9e66-863d3cdba86a",
+      "name": "Prepare Files for Summary",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        -272,
+        608
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{$json.fileInfo.mimeType === 'application/vnd.google-apps.document' ? 'https://www.googleapis.com/drive/v3/files/' + $json.fileInfo.fileId + '/export?mimeType=text/plain' : 'https://www.googleapis.com/drive/v3/files/' + $json.fileInfo.fileId + '?alt=media'}}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleDriveOAuth2Api",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "text"
+            }
+          }
+        }
+      },
+      "id": "0253b87b-36d5-4898-a65d-f1f949ee9320",
+      "name": "Download File Content",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [
+        -48,
+        608
+      ],
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "eszQwJ5VM9t6FZ0D",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googlePalmApi",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "key",
+              "value": "=AIzaSyDizmW-bQuLX4sxI1LAZjI2e4gxiF6l9gE"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {}
+          ]
+        },
+        "options": {}
+      },
+      "id": "b3b4ad72-22f5-4c72-864f-34822c0f3826",
+      "name": "AI Summarize Content",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [
+        176,
+        608
+      ],
+      "credentials": {
+        "googlePalmApi": {
+          "id": "CrOHE6IQnNPHGYXO",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "functionCode": "// Process Gemini API response and extract the generated text\nconst response = $input.first().json;\n\n// Gemini API returns response in format: { candidates: [{ content: { parts: [{ text: \"...\" }] } }] }\nlet summary = '';\n\nif (response.candidates && response.candidates.length > 0) {\n  const candidate = response.candidates[0];\n  if (candidate.content && candidate.content.parts && candidate.content.parts.length > 0) {\n    summary = candidate.content.parts[0].text || '';\n  }\n}\n\n// If no summary found, provide fallback\nif (!summary) {\n  summary = 'Unable to generate summary from the document content.';\n}\n\n// Return in format expected by downstream nodes (compatible with OpenAI format)\nreturn {\n  json: {\n    summary: summary.trim(),\n    model: 'gemini-1.5-flash',\n    timestamp: new Date().toISOString()\n  }\n};"
+      },
+      "id": "251e530c-89c2-40ec-b5d2-35d945b8e7a9",
+      "name": "Process Gemini Response",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        336,
+        592
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "// Format help message\nconst helpMessage = `🤖 *WhatsApp Drive Assistant*\n\n*Available Commands:*\n\n📁 *LIST* /folder-path\n   List all files in a folder\n   Example: LIST /ProjectX\n\n🗑️ *DELETE* /path/to/file\n   Delete a specific file\n   Example: DELETE /ProjectX/report.pdf\n\n📦 *MOVE* /source /destination\n   Move file to another folder\n   Example: MOVE /ProjectX/file.pdf /Archive\n\n📄 *SUMMARY* /folder-or-file\n   Get AI summary of documents\n   Examples: \n   • SUMMARY /ProjectX (folder)\n   • SUMMARY My Resume.pdf (single file)\n   • SUMMARY / (root folder)\n\n❓ *HELP*\n   Show this help message\n\n*Safety Features:*\n• DELETE requires confirmation\n• All actions are logged\n• Rate limited to 10 ops/minute\n\n*Supported File Types for Summary:*\n• PDF, Word docs, Text files\n• Google Docs\n\nSend any command to get started! 🚀`;\n\nreturn {\n  response: helpMessage,\n  messageType: 'help'\n};"
+      },
+      "id": "24b4ea1d-364b-4415-a623-2877d17ea8b9",
+      "name": "Show Help",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        -480,
+        1072
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "// Format error response\nconst errorMessage = $json.parsed.error;\nconst friendlyError = `❌ *Command Error*\n\n${errorMessage}\n\nSend *HELP* to see available commands and syntax.\n\n*Quick Examples:*\n• LIST /\n• SUMMARY /MyFolder\n• HELP`;\n\nreturn {\n  response: friendlyError,\n  messageType: 'error'\n};"
+      },
+      "id": "9ba4bd9c-aa5c-49f3-8bbe-c97f98b04b0c",
+      "name": "Format Error Response",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        -1200,
+        1040
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "// Format file list response\nconst files = $input.all();\nlet fileList = '';\nlet folderCount = 0;\nlet fileCount = 0;\n\n// Get the path from the original command (from Route Command node)\nconst originalPath = $('Parse WhatsApp Command').item.json.parsed.path || '/';\n\nif (files.length > 0 && files[0].json && files[0].json.files) {\n  const driveFiles = files[0].json.files;\n  \n  if (driveFiles.length === 0) {\n    fileList = '📂 *Folder is empty*';\n  } else {\n    fileList = `📁 *Files in ${originalPath}:*\n\n`;\n    \n    // Sort files: folders first, then files\n    const sorted = driveFiles.sort((a, b) => {\n      if (a.mimeType === 'application/vnd.google-apps.folder' && b.mimeType !== 'application/vnd.google-apps.folder') return -1;\n      if (a.mimeType !== 'application/vnd.google-apps.folder' && b.mimeType === 'application/vnd.google-apps.folder') return 1;\n      return a.name.localeCompare(b.name);\n    });\n    \n    for (let file of sorted.slice(0, 20)) { // Limit to 20 items\n      const isFolder = file.mimeType === 'application/vnd.google-apps.folder';\n      const icon = isFolder ? '📁' : '📄';\n      const size = isFolder ? '' : ` (${formatFileSize(file.size || 0)})`;\n      \n      fileList += `${icon} ${file.name}${size}\n`;\n      \n      if (isFolder) folderCount++;\n      else fileCount++;\n    }\n    \n    if (driveFiles.length > 20) {\n      fileList += `\n... and ${driveFiles.length - 20} more items`;\n    }\n    \n    fileList += `\n\n📊 *Summary:* ${folderCount} folders, ${fileCount} files`;\n  }\n} else {\n  fileList = '❌ Could not access folder. Check the path and try again.';\n}\n\nfunction formatFileSize(bytes) {\n  if (bytes === 0) return '0 B';\n  const k = 1024;\n  const sizes = ['B', 'KB', 'MB', 'GB'];\n  const i = Math.floor(Math.log(bytes) / Math.log(k));\n  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];\n}\n\nreturn {\n  response: fileList,\n  messageType: 'list'\n};"
+      },
+      "id": "c6af3e1e-36b7-4e88-8121-1619b4bed1d3",
+      "name": "Format List Response",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        -272,
+        368
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "// Format delete confirmation response\nconst originalPath = $('Parse WhatsApp Command').item.json.parsed.path;\nconst fileName = originalPath.split('/').pop() || 'Unknown file';\nconst deleteMessage = `🗑️ *File Deleted Successfully*\n\n📄 File: ${fileName}\n📁 Path: ${originalPath}\n⏰ Time: ${new Date().toLocaleString()}\n\n✅ The file has been permanently removed from your Google Drive.\n\n*Note:* Deleted files may still be recoverable from Google Drive's trash for 30 days.`;\n\nreturn {\n  response: deleteMessage,\n  messageType: 'delete'\n};"
+      },
+      "id": "ceba09b4-efec-4715-a14b-17c2106a2d95",
+      "name": "Format Delete Response",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        -272,
+        448
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "// Format move confirmation response\n// Get the original command data from Prepare Move Data node\nconst moveData = $('Prepare Move Data').first().json;\nconst fileName = moveData.fileName;\nconst originalCommand = moveData.originalCommand;\n\nconst moveMessage = `📦 *File Moved Successfully*\n\n📄 File: ${fileName}\n📁 From: ${originalCommand.path}\n📁 To: ${originalCommand.destination}\n⏰ Time: ${new Date().toLocaleString()}\n\n✅ The file has been moved to the new location.`;\n\nreturn {\n  response: moveMessage,\n  messageType: 'move'\n};"
+      },
+      "id": "00485a8d-daa5-4ed3-92a5-4806825be0f6",
+      "name": "Format Move Response",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        -272,
+        528
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "// Combine all AI summaries into one response\nconst summaries = $input.all();\nlet summaryText = `📄 *AI Summary for ${$('Parse WhatsApp Command').item.json.parsed.path || '/'}:*\n\n`;\n\nif (summaries.length === 0) {\n  summaryText += '📂 No summarizable documents found in this folder.\n\n*Supported formats:* PDF, Word docs, Google Docs, Text files';\n} else {\n  summaries.forEach((item, index) => {\n    // Handle both Gemini (new format) and OpenAI (legacy format) responses\n    let fileName = 'Document';\n    let summary = '';\n    \n    // Try to get filename from various possible sources\n    if (item.json.fileInfo && item.json.fileInfo.fileName) {\n      fileName = item.json.fileInfo.fileName;\n    } else if (item.json.fileName) {\n      fileName = item.json.fileName;\n    }\n    \n    // Try to get summary from various possible sources\n    if (item.json.summary) {\n      summary = item.json.summary; // Gemini processed format\n    } else if (item.json.choices && item.json.choices[0] && item.json.choices[0].message) {\n      summary = item.json.choices[0].message.content; // OpenAI format\n    } else {\n      summary = 'Summary not available';\n    }\n    \n    summaryText += `📄 **${fileName}**\n${summary}\n\n`;\n  });\n  \n  const model = summaries[0].json.model || 'AI';\n  summaryText += `\n🤖 *Generated by ${model}* • ${summaries.length} document(s) summarized`;\n}\n\nreturn {\n  response: summaryText,\n  messageType: 'summary'\n};"
+      },
+      "id": "67bf8f8e-ab4b-46bf-b671-187cacd852e5",
+      "name": "Format Summary Response",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        528,
+        608
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "// Debug: Log the data being sent to Vonage\nconsole.log('WhatsApp data:', JSON.stringify($json.whatsapp, null, 2));\nconsole.log('Response text:', $json.response);\nconsole.log('Environment check:');\nconsole.log('VONAGE_API_KEY exists:', !!process.env.VONAGE_API_KEY);\nconsole.log('VONAGE_API_SECRET exists:', !!process.env.VONAGE_API_SECRET);\n\nreturn $json;"
+      },
+      "id": "1bb7523b-3dbf-403d-be6a-c5a65a2b1277",
+      "name": "Debug Vonage Request",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        -32,
+        912
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://messages-sandbox.nexmo.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Accept",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{\n  JSON.stringify({\n    \"from\": \"14157386102\",\n    \"to\": 919392487279,\n    \"message_type\": \"text\", \n    \"text\": $json.response,\n    \"channel\": \"whatsapp\"\n  })\n}}",
+        "options": {}
+      },
+      "id": "ee43973c-364d-4f3f-9a4a-8e0d5d368f8c",
+      "name": "Send WhatsApp Response",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [
+        176,
+        912
+      ],
+      "credentials": {
+        "httpBasicAuth": {
+          "id": "2KE00QW1ek7yqjvl",
+          "name": "VONAGI CREDS"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "WhatsApp Webhook": {
+      "main": [
+        [
+          {
+            "node": "Parse WhatsApp Command",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse WhatsApp Command": {
+      "main": [
+        [
+          {
+            "node": "Valid Command?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Valid Command?": {
+      "main": [
+        [
+          {
+            "node": "Route Command",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Format Error Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route Command": {
+      "main": [
+        [
+          {
+            "node": "List Google Drive Files",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Delete Google Drive File",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Search File to Move",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Search Summary Folder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "List Google Drive Files": {
+      "main": [
+        [
+          {
+            "node": "Format List Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Delete Google Drive File": {
+      "main": [
+        [
+          {
+            "node": "Actually Delete File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Actually Delete File": {
+      "main": [
+        [
+          {
+            "node": "Format Delete Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Move Google Drive File": {
+      "main": [
+        [
+          {
+            "node": "Format Move Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Search File to Move": {
+      "main": [
+        [
+          {
+            "node": "Search Destination Folder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Search Destination Folder": {
+      "main": [
+        [
+          {
+            "node": "Prepare Move Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Move Data": {
+      "main": [
+        [
+          {
+            "node": "Move Google Drive File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Search Summary Folder": {
+      "main": [
+        [
+          {
+            "node": "Prepare Summary Query",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Summary Query": {
+      "main": [
+        [
+          {
+            "node": "Get Files for Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Files for Summary": {
+      "main": [
+        [
+          {
+            "node": "Prepare Files for Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Files for Summary": {
+      "main": [
+        [
+          {
+            "node": "Download File Content",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download File Content": {
+      "main": [
+        [
+          {
+            "node": "AI Summarize Content",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Summarize Content": {
+      "main": [
+        [
+          {
+            "node": "Process Gemini Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Gemini Response": {
+      "main": [
+        [
+          {
+            "node": "Format Summary Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Show Help": {
+      "main": [
+        [
+          {
+            "node": "Debug Vonage Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Error Response": {
+      "main": [
+        [
+          {
+            "node": "Debug Vonage Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format List Response": {
+      "main": [
+        [
+          {
+            "node": "Debug Vonage Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Delete Response": {
+      "main": [
+        [
+          {
+            "node": "Debug Vonage Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Move Response": {
+      "main": [
+        [
+          {
+            "node": "Debug Vonage Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Summary Response": {
+      "main": [
+        [
+          {
+            "node": "Debug Vonage Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Debug Vonage Request": {
+      "main": [
+        [
+          {
+            "node": "Send WhatsApp Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "9f5d7f6c-88be-44ca-91e2-e51b9f49beab",
+  "meta": {
+    "instanceId": "d3172b03a850487a9412af40a449c16f391cbab65620c303214e3e1c9fe39a7c"
+  },
+  "id": "V1bBrTDjvmrsNIzv",
+  "tags": [
+    {
+      "createdAt": "2025-08-05T08:22:48.546Z",
+      "updatedAt": "2025-08-05T08:22:48.546Z",
+      "id": "FgjRmwQMxQxPRzJo",
+      "name": "WhatsApp Automation"
+    }
+  ]
+}
